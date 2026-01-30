@@ -45,3 +45,8 @@ Open `http://localhost:5175/api/health` to confirm the backend sees the deployed
 ### IPFS gateway
 `backend/.env` supports `IPFS_GATEWAYS` (comma-separated) and `VERIFY_SCAN_LIMIT` to tune chain verification and IPFS reads.
 The frontends can override the gateway via `VITE_IPFS_GATEWAY`.
+
+## Admin login (wallet-based)
+The upload frontend now requires a wallet signature.
+- Backend env: set `ADMIN_WALLET_ADDRESS` and `AUTH_JWT_SECRET`.
+- Flow: connect wallet → sign message → receive a JWT → upload with `Authorization: Bearer <token>`.

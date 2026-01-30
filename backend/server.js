@@ -6,7 +6,9 @@ const FormData = require('form-data')
 const dotenv = require('dotenv')
 const fs = require('fs')
 const path = require('path')
+const crypto = require('crypto')
 const { ethers } = require('ethers')
+const jwt = require('jsonwebtoken')
 
 dotenv.config()
 
@@ -27,6 +29,10 @@ const {
   PUBLIC_ANCHOR_PRIVATE_KEY,
   PUBLIC_ANCHOR_ADDRESS,
   PORT,
+  ADMIN_WALLET_ADDRESS,
+  AUTH_JWT_SECRET,
+  AUTH_TOKEN_TTL,
+  AUTH_NONCE_TTL_MS,
 } = process.env
 
 const REQUIRED_ENV = [
@@ -35,6 +41,8 @@ const REQUIRED_ENV = [
   'PUBLIC_RPC_URL',
   'PUBLIC_ANCHOR_PRIVATE_KEY',
   'PUBLIC_ANCHOR_ADDRESS',
+  'ADMIN_WALLET_ADDRESS',
+  'AUTH_JWT_SECRET',
 ]
 
 const STUDENT_RECORDS_ABI = [
@@ -57,6 +65,10 @@ const IPFS_GATEWAYS = (process.env.IPFS_GATEWAYS || '')
   .map((value) => value.trim())
   .filter(Boolean)
 const VERIFY_SCAN_LIMIT = Number(process.env.VERIFY_SCAN_LIMIT || 25)
+const NONCE_TTL_MS = Number(AUTH_NONCE_TTL_MS || 5 * 60 * 1000)
+const TOKEN_TTL = AUTH_TOKEN_TTL || '2h'
+
+const authNonces = new Map()
 
 function buildGatewayUrl(gateway, cid) {
   const base = gateway.endsWith('/') ? gateway : `${gateway}/`
@@ -114,6 +126,22 @@ function writeRecords(records) {
 
 function normalizeKey(value) {
   return String(value || '').trim().toLowerCase()
+}
+
+function normalizeAddress(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
+function issueToken(address) {
+  return jwt.sign({ address }, AUTH_JWT_SECRET, { expiresIn: TOKEN_TTL })
+}
+
+function verifyToken(token) {
+  return jwt.verify(token, AUTH_JWT_SECRET)
+}
+
+function buildLoginMessage(nonce) {
+  return `Login to Student Records\n\nNonce: ${nonce}`
 }
 
 async function findRecordOnChain(regKey, nicKey) {
@@ -279,6 +307,7 @@ app.get('/api/health', (req, res) => {
     missingEnv,
     anchorAddress: PUBLIC_ANCHOR_ADDRESS || null,
     rpcUrl: PUBLIC_RPC_URL ? 'configured' : null,
+    adminWallet: ADMIN_WALLET_ADDRESS || null,
   }
 
   if (!missingEnv.length) {
@@ -299,6 +328,78 @@ app.get('/api/health', (req, res) => {
 
   res.json(payload)
 })
+
+app.get('/api/auth/nonce', (req, res) => {
+  const address = String(req.query.address || '').trim()
+  if (!address) {
+    return res.status(400).json({ error: 'Wallet address is required.' })
+  }
+
+  const nonce = crypto.randomBytes(16).toString('hex')
+  authNonces.set(normalizeAddress(address), {
+    nonce,
+    expiresAt: Date.now() + NONCE_TTL_MS,
+  })
+
+  res.json({
+    nonce,
+    message: buildLoginMessage(nonce),
+  })
+})
+
+app.post('/api/auth/verify', async (req, res) => {
+  const { address, signature } = req.body || {}
+  if (!address || !signature) {
+    return res.status(400).json({ error: 'Address and signature are required.' })
+  }
+
+  const normalized = normalizeAddress(address)
+  const entry = authNonces.get(normalized)
+  if (!entry) {
+    return res.status(400).json({ error: 'Nonce not found. Request a new one.' })
+  }
+
+  if (Date.now() > entry.expiresAt) {
+    authNonces.delete(normalized)
+    return res.status(400).json({ error: 'Nonce expired. Request a new one.' })
+  }
+
+  try {
+    const message = buildLoginMessage(entry.nonce)
+    const recovered = ethers.verifyMessage(message, signature)
+    if (normalizeAddress(recovered) !== normalized) {
+      return res.status(401).json({ error: 'Signature verification failed.' })
+    }
+
+    if (
+      ADMIN_WALLET_ADDRESS &&
+      normalizeAddress(ADMIN_WALLET_ADDRESS) !== normalized
+    ) {
+      return res.status(403).json({ error: 'Wallet not authorized.' })
+    }
+
+    authNonces.delete(normalized)
+    const token = issueToken(normalized)
+    res.json({ token, address: normalized })
+  } catch (error) {
+    res.status(401).json({ error: 'Signature verification failed.' })
+  }
+})
+
+function requireAuth(req, res, next) {
+  const authHeader = req.headers.authorization || ''
+  if (!authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized.' })
+  }
+  const token = authHeader.slice(7)
+  try {
+    const payload = verifyToken(token)
+    req.user = payload
+    next()
+  } catch (error) {
+    return res.status(401).json({ error: 'Invalid or expired token.' })
+  }
+}
 
 app.get('/api/verify', async (req, res) => {
   const registrationNumber = String(req.query.registrationNumber || '').trim()
@@ -367,6 +468,7 @@ app.get('/api/verify', async (req, res) => {
 
 app.post(
   '/api/upload',
+  requireAuth,
   upload.fields([
     { name: 'transcript', maxCount: 1 },
     { name: 'results', maxCount: 1 },

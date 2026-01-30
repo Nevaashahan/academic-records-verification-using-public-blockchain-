@@ -238,6 +238,103 @@ button:disabled {
   color: var(--ink);
 }
 
+.wallet {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  word-break: break-all;
+}
+
+button.secondary {
+  background: #ffffff;
+  color: var(--accent);
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+
+.login-content {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.login-card {
+  background: var(--card);
+  border-radius: 28px;
+  padding: 2rem;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
+
+.login-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin: 1.2rem 0;
+}
+
+.login-note {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.login-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.login-steps div {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+.login-steps span {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #e6f7ee;
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+}
+
+.login-steps h3 {
+  margin: 0;
+}
+
+.upload-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.session-card {
+  background: #f2fff5;
+  border-radius: 16px;
+  padding: 1rem 1.2rem;
+  border: 1px solid var(--border);
+  min-width: 220px;
+}
+
+.session-card span {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+@media (max-width: 960px) {
+  .upload-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 @media (max-width: 960px) {
   .content {
     grid-template-columns: 1fr;
