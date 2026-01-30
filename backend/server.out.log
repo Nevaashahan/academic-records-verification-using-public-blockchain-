@@ -1,0 +1,6 @@
+
+> backend@1.0.0 dev
+> node server.js
+
+[dotenv@17.2.3] injecting env (9) from .env -- tip: 🗂️ backup and recover secrets: https://dotenvx.com/ops
+Backend listening on http://localhost:5175
